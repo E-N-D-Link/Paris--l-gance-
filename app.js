@@ -46,38 +46,24 @@ $('authBtn').textContent=user?'Se déconnecter':'Se connecter';
 }
 function initMap(){
 const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-if(mobile)L.Browser.any3d=false; // Avoid GPU compositor dropping tiles in some Android WebViews.
 map=L.map('map',{scrollWheelZoom:!mobile,zoomControl:true,zoomAnimation:!mobile,fadeAnimation:!mobile,markerZoomAnimation:!mobile}).setView([48.8647,2.336],13);
-const providers={
-osm:{url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',options:{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}},
-carto:{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',options:{subdomains:'abcd',maxZoom:19,attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}}
-};
-let baseLayer=null,errors=0,loaded=0,automaticFallback=false;
-const status=$('mapStatus'),selector=$('mapProvider');
-function useProvider(name,automatic=false){
-if(!Object.hasOwn(providers,name))name='osm';
-const provider=providers[name];
+let baseLayer=null,errors=0,loaded=0;
+const status=$('mapStatus');
+function loadTiles(){
 if(baseLayer){baseLayer.off();map.removeLayer(baseLayer)}
-selector.value=name;errors=0;loaded=0;
-if(!automatic)automaticFallback=false;
-status.style.display='none';
-baseLayer=L.tileLayer(provider.url,{...provider.options,keepBuffer:2,updateWhenIdle:mobile});
-baseLayer.on('tileload',()=>{loaded++;if(loaded>0&&errors===0)status.style.display='none'});
-baseLayer.on('tileerror',()=>{
-errors++;
-if(errors>=2&&!automaticFallback){
-automaticFallback=true;
-useProvider(name==='osm'?'carto':'osm',true);
-return;
-}
-if(errors>=2)status.style.display='block';
+errors=0;loaded=0;status.style.display='none';
+baseLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+maxZoom:19,keepBuffer:2,updateWhenIdle:mobile,
+attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 });
+baseLayer.on('tileload',()=>{loaded++;if(loaded>0)status.style.display='none'});
+baseLayer.on('tileerror',()=>{if(++errors>=3&&loaded===0)status.style.display='block'});
 baseLayer.addTo(map);
 map.invalidateSize({pan:false});
 }
-selector.addEventListener('change',()=>useProvider(selector.value));
-$('retryMap').addEventListener('click',()=>{automaticFallback=false;useProvider(selector.value)});
-useProvider('osm');
+$('reloadMap').addEventListener('click',loadTiles);
+$('retryMap').addEventListener('click',loadTiles);
+loadTiles();
 markers=L.layerGroup().addTo(map);
 let resizeScheduled=false;
 function refreshMapSize(){
