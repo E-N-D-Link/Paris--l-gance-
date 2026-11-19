@@ -2,8 +2,8 @@
 'use strict';
 const PROJECT_URL='https://ytdzcxlbtqhpopnyyjys.supabase.co';
 const PUBLISHABLE_KEY='sb_publishable_tLYB2xEX_-iaWl3qnm0axg_bau0-f0u';
-const CATS={palace:'Palace',restaurant:'Restaurant historique',cafe:'Café & salon de thé',walk:'Promenade',other:'Autre'};
-const COLORS={palace:'#9b7844',restaurant:'#a85b51',cafe:'#496a8b',walk:'#488066',other:'#78727a'};
+const CATS={palace:'Palace',restaurant:'Restaurant historique',cafe:'Café & salon de thé',walk:'Promenade',bar:'Bar & cocktails',other:'Autre'};
+const COLORS={palace:'#9b7844',restaurant:'#a85b51',cafe:'#496a8b',walk:'#488066',bar:'#6e5280',other:'#78727a'};
 const seed=[
 ['crillon','Hôtel de Crillon','10 place de la Concorde, 75008 Paris', 'palace',8,48.8671,2.3213,4],
 ['ritz','Ritz Paris','15 place Vendôme, 75001 Paris','palace',1,48.8681,2.3289,4],
@@ -19,8 +19,23 @@ const seed=[
 ['vendome','Place Vendôme','Place Vendôme, 75001 Paris','walk',1,48.8678,2.3296,0],
 ['vivienne','Galerie Vivienne','4 rue des Petits-Champs, 75002 Paris','walk',2,48.8666,2.3399,0],
 ['vosges','Place des Vosges','Place des Vosges, 75004 Paris','walk',4,48.8556,2.3655,0],
-['montaigne','Avenue Montaigne','Avenue Montaigne, 75008 Paris','walk',8,48.8662,2.3057,0]
-].map(([id,name,address,category,arrondissement,lat,lng,budget])=>({id,name,address,category,arrondissement,lat,lng,budget,description:'',source:'seed'}));
+['montaigne','Avenue Montaigne','Avenue Montaigne, 75008 Paris','walk',8,48.8662,2.3057,0],
+['ambassadeurs','Les Ambassadeurs — Hôtel de Crillon','10 place de la Concorde, 75008 Paris','bar',8,48.8671,2.3213,4],
+['bar228','Bar 228 — Le Meurice','228 rue de Rivoli, 75001 Paris','bar',1,48.865241,2.328127,4],
+['barbristol','Le Bar du Bristol','112 rue du Faubourg Saint-Honoré, 75008 Paris','bar',8,48.871645,2.314631,4],
+['bar8','Bar 8 — Mandarin Oriental','251 rue Saint-Honoré, 75001 Paris','bar',1,48.86724,2.32682,4],
+['mariage-marais','Mariage Frères — Le Marais','30 rue du Bourg-Tibourg, 75004 Paris','cafe',4,48.85772,2.356568,2],
+['initial','L’Initial','9 rue de Bièvre, 75005 Paris','restaurant',5,48.850666,2.350486,3],
+['salonproust','Salon Proust — Ritz Paris','15 place Vendôme, 75001 Paris','cafe',1,48.8681,2.3289,4]
+].map(([id,name,address,category,arrondissement,lat,lng,budget])=>({id,name,address,category,arrondissement,lat,lng,budget,description:({
+ambassadeurs:'Date grandiose : cocktails et champagne dans un décor historique du XVIIIe siècle.',
+bar228:'Date feutré : fauteuils en cuir, cocktails et ambiance musicale au Meurice.',
+barbristol:'Date élégant : cocktails signatures dans un bar confidentiel du Bristol.',
+bar8:'Date chic : cocktails dans le salon contemporain du Mandarin Oriental.',
+'mariage-marais':'Date en journée : dégustation de thés dans une maison historique du Marais.',
+initial:'Date gastronomique : table intimiste et cuisine française raffinée près de Notre-Dame.',
+salonproust:'Date romantique en journée : tea time et madeleines dans le salon littéraire du Ritz.'
+}[id]||''),source:'seed'}));
 const $=id=>document.getElementById(id);
 let db=null, user=null, roomId=null, roomOwner=false, roomMembers=[],custom=[],visits=[],markers=null,map=null,choosing=false,pendingInvite=null,busy=false;
 const localKey='paris-elegance-visits-v1';
