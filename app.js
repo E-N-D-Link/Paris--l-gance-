@@ -45,37 +45,52 @@ $('account').textContent=user?(roomId?'Carnet partagé · '+roomMembers.length+'
 $('authBtn').textContent=user?'Se déconnecter':'Se connecter';
 }
 function initMap(){
-map=L.map('map',{scrollWheelZoom:false,zoomControl:true,preferCanvas:true}).setView([48.8647,2.336],13);
-const providers=[
-{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',options:{subdomains:'abcd',maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'}},
-{url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',options:{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}}
-];
-let providerIndex=0,failedTiles=0,baseLayer=null;
-function switchTiles(){
-if(providerIndex>=providers.length)return;
-const p=providers[providerIndex++];
-if(baseLayer)map.removeLayer(baseLayer);
-failedTiles=0;
-baseLayer=L.tileLayer(p.url,{...p.options,keepBuffer:4,updateWhenIdle:true});
+const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+if(mobile)L.Browser.any3d=false; // Avoid GPU compositor dropping tiles in some Android WebViews.
+map=L.map('map',{scrollWheelZoom:!mobile,zoomControl:true,zoomAnimation:!mobile,fadeAnimation:!mobile,markerZoomAnimation:!mobile}).setView([48.8647,2.336],13);
+const providers={
+osm:{url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',options:{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}},
+carto:{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',options:{subdomains:'abcd',maxZoom:19,attribution:'&copy; OpenStreetMap contributors &copy; CARTO'}}
+};
+let baseLayer=null,errors=0,loaded=0,automaticFallback=false;
+const status=$('mapStatus'),selector=$('mapProvider');
+function useProvider(name,automatic=false){
+if(!Object.hasOwn(providers,name))name='osm';
+const provider=providers[name];
+if(baseLayer){baseLayer.off();map.removeLayer(baseLayer)}
+selector.value=name;errors=0;loaded=0;
+if(!automatic)automaticFallback=false;
+status.style.display='none';
+baseLayer=L.tileLayer(provider.url,{...provider.options,keepBuffer:2,updateWhenIdle:mobile});
+baseLayer.on('tileload',()=>{loaded++;if(loaded>0&&errors===0)status.style.display='none'});
 baseLayer.on('tileerror',()=>{
-if(++failedTiles>=3&&providerIndex<providers.length)switchTiles();
+errors++;
+if(errors>=2&&!automaticFallback){
+automaticFallback=true;
+useProvider(name==='osm'?'carto':'osm',true);
+return;
+}
+if(errors>=2)status.style.display='block';
 });
 baseLayer.addTo(map);
+map.invalidateSize({pan:false});
 }
-switchTiles();
+selector.addEventListener('change',()=>useProvider(selector.value));
+$('retryMap').addEventListener('click',()=>{automaticFallback=false;useProvider(selector.value)});
+useProvider('osm');
 markers=L.layerGroup().addTo(map);
-let sizePending=false;
+let resizeScheduled=false;
 function refreshMapSize(){
-if(sizePending)return;
-sizePending=true;
-requestAnimationFrame(()=>{sizePending=false;if(map)map.invalidateSize({pan:false,debounceMoveend:true});});
+if(resizeScheduled)return;
+resizeScheduled=true;
+requestAnimationFrame(()=>{resizeScheduled=false;map.invalidateSize({pan:false,debounceMoveend:true});});
 }
 window.addEventListener('resize',refreshMapSize);
 window.addEventListener('orientationchange',refreshMapSize);
 window.addEventListener('pageshow',refreshMapSize);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshMapSize()});
 if('ResizeObserver' in window)new ResizeObserver(refreshMapSize).observe($('map'));
-refreshMapSize();
+requestAnimationFrame(refreshMapSize);
 map.whenReady(refreshMapSize);
 map.on('click',e=>{if(!choosing)return;choosing=false;$('newLat').value=e.latlng.lat.toFixed(6);$('newLng').value=e.latlng.lng.toFixed(6);$('addDialog').showModal();alertUI('Coordonnées enregistrées. Complétez l’adresse puis validez.')});
 }
