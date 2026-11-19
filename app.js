@@ -44,8 +44,41 @@ markers.clearLayers();for(const p of f){if(!Number.isFinite(Number(p.lat))||!Num
 $('account').textContent=user?(roomId?'Carnet partagé · '+roomMembers.length+' membre(s)':'Connecté · carnet à choisir'):'Mode découverte';
 $('authBtn').textContent=user?'Se déconnecter':'Se connecter';
 }
-function initMap(){map=L.map('map',{scrollWheelZoom:true}).setView([48.8647,2.336],13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);markers=L.layerGroup().addTo(map);window.addEventListener('resize',()=>map.invalidateSize({pan:false}));window.addEventListener('orientationchange',()=>requestAnimationFrame(()=>map.invalidateSize({pan:false})));requestAnimationFrame(()=>map.invalidateSize({pan:false}));map.on('click',e=>{if(!choosing)return;choosing=false;$('newLat').value=e.latlng.lat.toFixed(6);$('newLng').value=e.latlng.lng.toFixed(6);$('addDialog').showModal();alertUI('Coordonnées enregistrées. Complétez l’adresse puis validez.')})}
+function initMap(){
+map=L.map('map',{scrollWheelZoom:false,zoomControl:true,preferCanvas:true}).setView([48.8647,2.336],13);
+const providers=[
+{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',options:{subdomains:'abcd',maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'}},
+{url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',options:{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}}
+];
+let providerIndex=0,failedTiles=0,baseLayer=null;
+function switchTiles(){
+if(providerIndex>=providers.length)return;
+const p=providers[providerIndex++];
+if(baseLayer)map.removeLayer(baseLayer);
+failedTiles=0;
+baseLayer=L.tileLayer(p.url,{...p.options,keepBuffer:4,updateWhenIdle:true});
+baseLayer.on('tileerror',()=>{
+if(++failedTiles>=3&&providerIndex<providers.length)switchTiles();
+});
+baseLayer.addTo(map);
+}
+switchTiles();
+markers=L.layerGroup().addTo(map);
+let sizePending=false;
+function refreshMapSize(){
+if(sizePending)return;
+sizePending=true;
+requestAnimationFrame(()=>{sizePending=false;if(map)map.invalidateSize({pan:false,debounceMoveend:true});});
+}
+window.addEventListener('resize',refreshMapSize);
+window.addEventListener('orientationchange',refreshMapSize);
+window.addEventListener('pageshow',refreshMapSize);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshMapSize()});
+if('ResizeObserver' in window)new ResizeObserver(refreshMapSize).observe($('map'));
+refreshMapSize();
+map.whenReady(refreshMapSize);
+map.on('click',e=>{if(!choosing)return;choosing=false;$('newLat').value=e.latlng.lat.toFixed(6);$('newLng').value=e.latlng.lng.toFixed(6);$('addDialog').showModal();alertUI('Coordonnées enregistrées. Complétez l’adresse puis validez.')});
+}
 function focusPlace(id){const p=allPlaces().find(x=>String(x.id)===String(id));if(!p)return;map.setView([p.lat,p.lng],16);markers.eachLayer(m=>{if(m.placeId===String(id))m.openPopup()});if(innerWidth<850)window.scrollTo({top:250,behavior:'smooth'})}
 async function toggleVisit(id,checked){if(!active()){let ids=readLocal();ids=checked?[...new Set([...ids,id])]:ids.filter(v=>v!==id);saveLocal(ids);render();return}
 try{const payload={room_id:roomId,place_id:id,user_id:user.id,visited:checked};const {error}=await db.from('place_visits').upsert(payload,{onConflict:'room_id,place_id,user_id'});if(error)throw error;visits=visits.filter(v=>!(v.place_id===id&&v.user_id===user.id));visits.push(payload);render()}catch(err){alertUI('Visite non sauvegardée : '+err.message,true);render()}}
