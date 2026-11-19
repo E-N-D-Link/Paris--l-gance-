@@ -37,7 +37,7 @@ initial:'Date gastronomique : table intimiste et cuisine française raffinée pr
 salonproust:'Date romantique en journée : tea time et madeleines dans le salon littéraire du Ritz.'
 }[id]||''),source:'seed'}));
 const $=id=>document.getElementById(id);
-let db=null, user=null, roomId=null, roomOwner=false, roomMembers=[],custom=[],visits=[],markers=null,map=null,choosing=false,pendingInvite=null,busy=false;
+let db=null, user=null, roomId=null, roomOwner=false, roomMembers=[],custom=[],visits=[],dateIdeas=[],markers=null,map=null,choosing=false,pendingInvite=null,busy=false;
 const localKey='paris-elegance-visits-v1';
 const escaped=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const alertUI=(message,error=false)=>{let el=$('notice');el.textContent=message;el.className=error?'error':'';el.style.display='block';};
@@ -48,13 +48,14 @@ function isVisited(place){if(user&&roomId)return visits.some(v=>v.place_id===Str
 function readLocal(){try{return JSON.parse(localStorage.getItem(localKey)||'[]')}catch{return []}}
 const saveLocal=items=>localStorage.setItem(localKey,JSON.stringify(items));
 const active=()=>Boolean(user&&roomId);
+const isDateIdea=p=>active()&&dateIdeas.some(x=>x.place_id===String(p.id));
 function popup(p){return '<div style="min-width:180px"><b>'+escaped(p.name)+'</b><p>'+escaped(p.address)+'</p><small>'+escaped(CATS[p.category]||'Autre')+' · '+labelBudget(p.budget)+'</small></div>'}
 function filters(){return {text:$('search').value.toLocaleLowerCase('fr').trim(),cat:$('category').value,status:$('status').value,district:$('district').value,budget:$('budget').value}}
-function filtered(){const f=filters();return allPlaces().filter(p=>(!f.text||[p.name,p.address,p.description].join(' ').toLocaleLowerCase('fr').includes(f.text))&&(f.cat==='all'||p.category===f.cat)&&(f.status==='all'||(f.status==='visited')===isVisited(p))&&(f.district==='all'||String(p.arrondissement)===f.district)&&(f.budget==='all'||Number(p.budget)===Number(f.budget)))}
+function filtered(){const f=filters();return allPlaces().filter(p=>(!f.text||[p.name,p.address,p.description].join(' ').toLocaleLowerCase('fr').includes(f.text))&&(f.cat==='all'||p.category===f.cat)&&(f.status==='all'||(f.status==='together'?isDateIdea(p):(f.status==='visited')===isVisited(p)))&&(f.district==='all'||String(p.arrondissement)===f.district)&&(f.budget==='all'||Number(p.budget)===Number(f.budget)))}
 function setOptions(){const select=$('district'),v=select.value,arr=[...new Set(allPlaces().map(p=>p.arrondissement))].sort((a,b)=>a-b);select.innerHTML='<option value="all">Tous</option>'+arr.map(n=>'<option value="'+n+'">'+n+'e</option>').join('');select.value=arr.map(String).includes(v)?v:'all'}
 function render(){setOptions();const f=filtered(),total=allPlaces().length,completed=allPlaces().filter(isVisited).length;
-$('count').textContent=completed+' / '+total;$('bar').style.width=(total?100*completed/total:0)+'%';
-$('places').innerHTML=f.length?f.map(p=>'<article class="place"><div class="place-top"><div><span class="chip" style="background:'+COLORS[p.category]+'18;color:'+COLORS[p.category]+'">'+escaped(CATS[p.category]||'Autre')+'</span><h3>'+escaped(p.name)+'</h3></div><span class="muted" style="font-size:11px">'+labelBudget(p.budget)+'</span></div><p>'+escaped(p.address)+'</p>'+ (p.description?'<p>'+escaped(p.description)+'</p>':'')+'<div class="actions"><label class="visit"><input type="checkbox" data-visit="'+escaped(p.id)+'" '+(isVisited(p)?'checked':'')+'> Visité</label><button type="button" data-focus="'+escaped(p.id)+'">Voir sur la carte</button></div></article>').join(''):'<p class="help">Aucun lieu pour ces filtres.</p>';
+$('count').textContent=completed+' / '+total;$('togetherCount').textContent=active()?dateIdeas.length+' envie(s) en commun':'Connectez-vous à un carnet pour choisir ensemble';$('bar').style.width=(total?100*completed/total:0)+'%';
+$('places').innerHTML=f.length?f.map(p=>'<article class="place"><div class="place-top"><div><span class="chip" style="background:'+COLORS[p.category]+'18;color:'+COLORS[p.category]+'">'+escaped(CATS[p.category]||'Autre')+'</span><h3>'+escaped(p.name)+'</h3></div><span class="muted" style="font-size:11px">'+labelBudget(p.budget)+'</span></div><p>'+escaped(p.address)+'</p>'+ (p.description?'<p>'+escaped(p.description)+'</p>':'')+'<div class="actions"><label class="visit"><input type="checkbox" data-visit="'+escaped(p.id)+'" '+(isVisited(p)?'checked':'')+'> Visité</label><button type="button" data-focus="'+escaped(p.id)+'">Voir sur la carte</button></div><button type="button" class="date-idea '+(isDateIdea(p)?'selected':'')+'" data-date="'+escaped(p.id)+'" aria-pressed="'+isDateIdea(p)+'">'+(isDateIdea(p)?'❤️ À faire ensemble ✓':'♡ À faire ensemble')+'</button></article>').join(''):'<p class="help">Aucun lieu pour ces filtres.</p>';
 markers.clearLayers();for(const p of f){if(!Number.isFinite(Number(p.lat))||!Number.isFinite(Number(p.lng)))continue;const icon=L.divIcon({html:'<div style="width:16px;height:16px;background:'+COLORS[p.category]+';border:3px solid #fff;border-radius:50%;box-shadow:0 1px 8px #0006;'+(isVisited(p)?'outline:3px solid #c7a469;':'')+'"></div>',className:'',iconSize:[16,16],iconAnchor:[8,8]});const marker=L.marker([p.lat,p.lng],{icon}).bindPopup(popup(p));marker.placeId=String(p.id);markers.addLayer(marker)}
 $('account').textContent=user?(roomId?'Carnet partagé · '+roomMembers.length+' membre(s)':'Connecté · carnet à choisir'):'Mode découverte';
 $('authBtn').textContent=user?'Se déconnecter':'Se connecter';
@@ -96,16 +97,38 @@ map.whenReady(refreshMapSize);
 map.on('click',e=>{if(!choosing)return;choosing=false;$('newLat').value=e.latlng.lat.toFixed(6);$('newLng').value=e.latlng.lng.toFixed(6);$('addDialog').showModal();alertUI('Coordonnées enregistrées. Complétez l’adresse puis validez.')});
 }
 function focusPlace(id){const p=allPlaces().find(x=>String(x.id)===String(id));if(!p)return;map.setView([p.lat,p.lng],16);markers.eachLayer(m=>{if(m.placeId===String(id))m.openPopup()});if(innerWidth<850)window.scrollTo({top:250,behavior:'smooth'})}
+async function toggleDateIdea(id){
+if(!active()){alertUI('Connectez-vous et sélectionnez un carnet privé pour préparer vos sorties ensemble.',true);if(!user)$('authDialog').showModal();else showGroup();return}
+const currentRoom=roomId,found=dateIdeas.find(x=>x.place_id===id);
+try{
+const response=found?await db.from('room_date_ideas').delete().eq('room_id',currentRoom).eq('place_id',id):await db.from('room_date_ideas').insert({room_id:currentRoom,place_id:id,added_by:user.id});
+if(response.error)throw response.error;
+if(roomId!==currentRoom)return;
+dateIdeas=found?dateIdeas.filter(x=>x.place_id!==id):[...dateIdeas,{room_id:currentRoom,place_id:id,added_by:user.id}];
+render();alertUI(found?'Adresse retirée des envies communes.':'❤️ Adresse ajoutée aux envies communes du carnet.');
+}catch(err){alertUI('Liste commune non modifiée : '+err.message,true)}
+}
 async function toggleVisit(id,checked){if(!active()){let ids=readLocal();ids=checked?[...new Set([...ids,id])]:ids.filter(v=>v!==id);saveLocal(ids);render();return}
 try{const payload={room_id:roomId,place_id:id,user_id:user.id,visited:checked};const {error}=await db.from('place_visits').upsert(payload,{onConflict:'room_id,place_id,user_id'});if(error)throw error;visits=visits.filter(v=>!(v.place_id===id&&v.user_id===user.id));visits.push(payload);render()}catch(err){alertUI('Visite non sauvegardée : '+err.message,true);render()}}
-async function refresh(){if(!active()||busy)return;try{const [p,v,m]=await Promise.all([db.from('custom_places').select('*').eq('room_id',roomId).order('created_at',{ascending:true}),db.from('place_visits').select('*').eq('room_id',roomId),db.from('room_members').select('room_id,user_id,display_name,joined_at').eq('room_id',roomId)]);for(const r of [p,v,m])if(r.error)throw r.error;custom=p.data||[];visits=v.data||[];roomMembers=m.data||[];render()}catch(e){alertUI('Synchronisation impossible : '+e.message,true)}}
+async function refresh(){if(!active()||busy)return;const currentRoom=roomId;try{
+const [p,v,m,d]=await Promise.all([
+db.from('custom_places').select('*').eq('room_id',currentRoom).order('created_at',{ascending:true}),
+db.from('place_visits').select('*').eq('room_id',currentRoom),
+db.from('room_members').select('room_id,user_id,display_name,joined_at').eq('room_id',currentRoom),
+db.from('room_date_ideas').select('room_id,place_id,added_by,created_at').eq('room_id',currentRoom)
+]);
+for(const result of [p,v,m,d])if(result.error)throw result.error;
+if(currentRoom!==roomId)return;
+custom=p.data||[];visits=v.data||[];roomMembers=m.data||[];dateIdeas=d.data||[];render();
+}catch(e){alertUI('Synchronisation impossible : '+e.message,true)}}
+
 async function loadRooms(){if(!user)return;const {data,error}=await db.from('room_members').select('room_id,display_name,joined_at').eq('user_id',user.id);if(error)throw error;const ids=(data||[]).map(x=>x.room_id);if(roomId&&!ids.includes(roomId))roomId=null;if(!roomId&&ids.length)roomId=ids[0]||null;return data||[]}
-async function selectRoom(id){roomId=id;custom=[];visits=[];roomMembers=[];await refresh();$('groupDialog').close();alertUI('Carnet privé sélectionné. Les visites sont synchronisées avec vos amis.')}
+async function selectRoom(id){roomId=id;custom=[];visits=[];dateIdeas=[];roomMembers=[];await refresh();$('groupDialog').close();alertUI('Carnet privé sélectionné. Les visites sont synchronisées avec vos amis.')}
 function parseInvite(text){try{const url=new URL(text,location.href);const token=new URLSearchParams(url.hash.slice(1)).get('invite');if(token)return parseInvite(token)}catch{}const m=text.trim().match(/^([0-9a-f-]{36})\.([0-9a-f]{64})$/i);return m?{room:m[1],token:m[2]}:null}
 function inviteLink(id,token){return location.origin+location.pathname+'#invite='+id+'.'+token}
 function extractInvite(){let hash=new URLSearchParams(location.hash.slice(1)).get('invite');if(hash){pendingInvite=parseInvite(hash);if(pendingInvite){$('inviteInput').value=hash;alertUI('Invitation détectée. Connectez-vous puis rejoignez le carnet.')}history.replaceState(null,'',location.pathname+location.search)}}
 function showGroup(){if(!user){$('authDialog').showModal();return}db.from('room_members').select('room_id,display_name,joined_at').eq('user_id',user.id).then(({data,error})=>{if(error){alertUI(error.message,true);return}const rooms=[...new Set((data||[]).map(x=>x.room_id))];$('groupList').innerHTML='<p class="help">Mes carnets ('+rooms.length+') :</p>'+rooms.map(id=>'<button type="button" class="secondary" style="margin:3px" data-room="'+escaped(id)+'">'+(id===roomId?'✓ ':'')+'Carnet '+id.slice(0,8)+'</button>').join('')+(roomId?'<p class="help">Carnet actif : '+roomId+' · membres : '+roomMembers.map(m=>escaped(m.display_name)).join(', ')+'</p><button class="secondary" id="rotateBtn">Créer un nouveau lien d’invitation</button>':'');$('groupInfo').textContent='Seuls les membres de votre groupe peuvent voir vos lieux personnalisés et les visites.';$('groupDialog').showModal()})}
-async function auth(){if(!window.supabase){alertUI('La bibliothèque Supabase ne s’est pas chargée. Vérifiez votre connexion.',true);return}db=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});const {data}=await db.auth.getUser();user=data?.user||null;db.auth.onAuthStateChange((_event,session)=>{if(_event==='PASSWORD_RECOVERY')setTimeout(()=>{if(!$('passwordDialog').open)$('passwordDialog').showModal();},0);const next=session?.user||null;if(next?.id!==user?.id){user=next;roomId=null;custom=[];visits=[];setTimeout(async()=>{if(user){try{await loadRooms();await refresh();if(pendingInvite)showGroup()}catch(err){alertUI(err.message,true)}}render()},0)}});if(user){try{await loadRooms();await refresh()}catch(e){alertUI(e.message,true)}}render();if(pendingInvite&&user)showGroup()}
+async function auth(){if(!window.supabase){alertUI('La bibliothèque Supabase ne s’est pas chargée. Vérifiez votre connexion.',true);return}db=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});const {data}=await db.auth.getUser();user=data?.user||null;db.auth.onAuthStateChange((_event,session)=>{if(_event==='PASSWORD_RECOVERY')setTimeout(()=>{if(!$('passwordDialog').open)$('passwordDialog').showModal();},0);const next=session?.user||null;if(next?.id!==user?.id){user=next;roomId=null;custom=[];visits=[];dateIdeas=[];setTimeout(async()=>{if(user){try{await loadRooms();await refresh();if(pendingInvite)showGroup()}catch(err){alertUI(err.message,true)}}render()},0)}});if(user){try{await loadRooms();await refresh()}catch(e){alertUI(e.message,true)}}render();if(pendingInvite&&user)showGroup()}
 function closeDialogs(){document.querySelectorAll('dialog').forEach(d=>d.close())}
 document.addEventListener('DOMContentLoaded',async()=>{
 initMap();render();extractInvite();await auth();
@@ -113,8 +136,8 @@ document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',
 ['search','category','status','district','budget'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',render));
 $('resetBtn').onclick=()=>{for(const id of ['category','status','district','budget'])$(id).value='all';$('search').value='';render()};
 $('places').addEventListener('change',e=>{if(e.target.matches('[data-visit]'))toggleVisit(e.target.dataset.visit,e.target.checked)});
-$('places').addEventListener('click',e=>{if(e.target.matches('[data-focus]'))focusPlace(e.target.dataset.focus)});
-$('authBtn').onclick=async()=>{if(user){await db.auth.signOut();user=null;roomId=null;custom=[];visits=[];render();alertUI('Déconnexion effectuée. Mode découverte activé.')}else $('authDialog').showModal()};
+$('places').addEventListener('click',e=>{const heart=e.target.closest('[data-date]');if(heart){toggleDateIdea(heart.dataset.date);return}const focus=e.target.closest('[data-focus]');if(focus)focusPlace(focus.dataset.focus)});
+$('authBtn').onclick=async()=>{if(user){await db.auth.signOut();user=null;roomId=null;custom=[];visits=[];dateIdeas=[];render();alertUI('Déconnexion effectuée. Mode découverte activé.')}else $('authDialog').showModal()};
 const authRedirect=location.origin+location.pathname;
 const emailValue=()=>$('email').value.trim().toLowerCase();
 const explainAuthError=err=>{
