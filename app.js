@@ -100,8 +100,48 @@ $('resetBtn').onclick=()=>{for(const id of ['category','status','district','budg
 $('places').addEventListener('change',e=>{if(e.target.matches('[data-visit]'))toggleVisit(e.target.dataset.visit,e.target.checked)});
 $('places').addEventListener('click',e=>{if(e.target.matches('[data-focus]'))focusPlace(e.target.dataset.focus)});
 $('authBtn').onclick=async()=>{if(user){await db.auth.signOut();user=null;roomId=null;custom=[];visits=[];render();alertUI('Déconnexion effectuée. Mode découverte activé.')}else $('authDialog').showModal()};
-$('authForm').onsubmit=async e=>{e.preventDefault();const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)alertUI(error.message,true);else{closeDialogs();alertUI('Connexion réussie. Bienvenue !');await loadRooms();await refresh();if(pendingInvite)showGroup();render()}};
-$('signupBtn').onclick=async()=>{if(!$('email').value||!$('password').value){alertUI('Renseignez votre e-mail et un mot de passe.',true);return}const {error,data}=await db.auth.signUp({email:$('email').value.trim(),password:$('password').value});if(error)alertUI(error.message,true);else{closeDialogs();alertUI(data?.session?'Compte créé, vous êtes connecté.':'Compte créé. Consultez votre boîte mail pour confirmer votre inscription.')}};
+const authRedirect=location.origin+location.pathname;
+const emailValue=()=>$('email').value.trim().toLowerCase();
+const explainAuthError=err=>{
+const code=err?.code||'',message=err?.message||'';
+if(code==='email_not_confirmed'||/email not confirmed/i.test(message))return "Votre e-mail n'est pas confirmé. Ouvrez le dernier e-mail de confirmation, ou cliquez sur « Renvoyer la confirmation ».";
+if(code==='over_email_send_rate_limit'||err?.status===429)return "Limite d'envoi d'e-mails atteinte. Réessayez plus tard, sans multiplier les demandes.";
+if(code==='invalid_credentials'||/invalid login credentials/i.test(message))return "Identifiants incorrects. Vérifiez votre adresse e-mail et votre mot de passe, ou utilisez « Mot de passe oublié ? ».";
+if(/redirect|url not allowed/i.test(message))return "Adresse de retour non autorisée dans Supabase Auth. Vérifiez les Redirect URLs du projet.";
+return message||"Une erreur d'authentification s'est produite.";
+};
+async function authAction(button,callback){
+if(!db){alertUI("Connexion à Supabase indisponible.",true);return}
+button.disabled=true;
+try{await callback()}catch(err){alertUI(explainAuthError(err),true)}
+finally{button.disabled=false}
+}
+$('authForm').onsubmit=async e=>{e.preventDefault();await authAction($('authForm').querySelector('[type="submit"]'),async()=>{
+const {error}=await db.auth.signInWithPassword({email:emailValue(),password:$('password').value});
+if(error)throw error;
+closeDialogs();alertUI('Connexion réussie. Bienvenue !');
+await loadRooms();await refresh();if(pendingInvite)showGroup();render();
+})};
+$('signupBtn').onclick=()=>authAction($('signupBtn'),async()=>{
+if(!emailValue()||!$('password').value){alertUI('Renseignez votre e-mail et un mot de passe.',true);return}
+if(!$('email').checkValidity()||!$('password').checkValidity()){alertUI('Vérifiez le format de votre e-mail et la longueur du mot de passe.',true);return}
+const {error,data}=await db.auth.signUp({email:emailValue(),password:$('password').value,options:{emailRedirectTo:authRedirect}});
+if(error)throw error;
+closeDialogs();
+alertUI(data?.session?'Compte créé et connecté.':'Demande enregistrée. Si un e-mail de confirmation est nécessaire, ouvrez le dernier reçu puis revenez sur Paris Élégance.');
+});
+$('resendBtn').onclick=()=>authAction($('resendBtn'),async()=>{
+if(!emailValue()||!$('email').checkValidity()){alertUI('Indiquez une adresse e-mail valide.',true);return}
+const {error}=await db.auth.resend({type:'signup',email:emailValue(),options:{emailRedirectTo:authRedirect}});
+if(error)throw error;
+closeDialogs();alertUI("Si votre compte attend une confirmation, un nouvel e-mail a été demandé. Consultez aussi les indésirables.");
+});
+$('resetPasswordBtn').onclick=()=>authAction($('resetPasswordBtn'),async()=>{
+if(!emailValue()||!$('email').checkValidity()){alertUI('Indiquez une adresse e-mail valide.',true);return}
+const {error}=await db.auth.resetPasswordForEmail(emailValue(),{redirectTo:authRedirect});
+if(error)throw error;
+closeDialogs();alertUI("Si un compte existe pour cette adresse, vous recevrez un lien de réinitialisation du mot de passe.");
+});
 $('groupBtn').onclick=showGroup;
 $('groupList').onclick=async e=>{const btn=e.target.closest('[data-room]');if(btn)await selectRoom(btn.dataset.room);if(e.target.id==='rotateBtn'){if(!confirm('Renouveler le lien d’invitation ? L’ancien lien ne fonctionnera plus.'))return;const {data,error}=await db.rpc('rotate_invite',{p_room:roomId});if(error){alertUI(error.message,true);return}const link=inviteLink(roomId,data);try{await navigator.clipboard.writeText(link);alertUI('Nouveau lien privé copié. Partagez-le uniquement avec vos amis.')}catch{prompt('Copiez le lien privé :',link)}closeDialogs()}};
 $('createGroupForm').onsubmit=async e=>{e.preventDefault();if(!user)return;const {data,error}=await db.rpc('create_room',{p_name:$('groupName').value.trim()});if(error){alertUI(error.message,true);return}await selectRoom(data.room_id);const link=inviteLink(data.room_id,data.invite_token);try{await navigator.clipboard.writeText(link);alertUI('Carnet créé ! Lien d’invitation copié. Conservez-le : il ne sera pas affiché à nouveau.')}catch{prompt('Conservez ce lien privé :',link)}};
